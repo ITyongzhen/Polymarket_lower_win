@@ -1,0 +1,30 @@
+module.exports = {
+  apps: [
+    {
+      name: "pm-lower-win-paper",
+      cwd: __dirname,
+      script: "./scripts/start_paper_low_win.sh",
+      interpreter: "bash",
+      autorestart: true,
+      max_restarts: 20,
+      restart_delay: 3000,
+      time: true,
+      out_file: "./Logs/pm2/paper-out.log",
+      error_file: "./Logs/pm2/paper-error.log",
+      merge_logs: true,
+    },
+    {
+      name: "pm-lower-win-chainlink",
+      cwd: __dirname,
+      script: "./scripts/start_chainlink_collector.sh",
+      interpreter: "bash",
+      autorestart: true,
+      max_restarts: 20,
+      restart_delay: 3000,
+      time: true,
+      out_file: "./Logs/pm2/chainlink-out.log",
+      error_file: "./Logs/pm2/chainlink-error.log",
+      merge_logs: true,
+    },
+  ],
+};
