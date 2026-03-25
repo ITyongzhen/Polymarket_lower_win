@@ -1,8 +1,15 @@
 # Polymarket Lower Win
 
-Research and paper-trading toolkit for low-probability Polymarket crypto up/down markets.
+Research toolkit and staged execution infrastructure for low-probability Polymarket crypto up/down markets.
 
 This repository focuses on a specific question: can extremely low-priced outcomes in short-horizon Polymarket crypto markets be traded systematically, instead of randomly buying "lottery tickets" that slowly bleed capital.
+
+The current public version is centered on research, data collection, and paper trading. The intended deployment path is staged:
+
+- validate entry logic with replay and paper trading
+- improve settlement-quality market data collection with Chainlink
+- deploy continuously on a cloud VM with PM2
+- only consider live execution after the data and risk controls are sufficiently validated
 
 The current implementation combines:
 
@@ -11,6 +18,19 @@ The current implementation combines:
 - Chainlink Data Streams raw report collection
 - external market context from Binance and Hyperliquid
 - local logging for replay, review, and later model improvement
+
+## 中文简介
+
+这是一个围绕 Polymarket 加密货币 `5m / 15m` `Up / Down` 市场的研究项目，目标不是盲目买极低概率事件，而是把“低价是否真的有 edge”拆成可验证的数据问题。
+
+当前公开仓库主要包含：
+
+- 公开账户与市场数据采集
+- 低概率单边策略的模拟盘
+- Chainlink Data Streams 原始报告采集
+- 云服务器与 PM2 持续运行准备
+
+当前阶段以研究、回放、模拟盘为主；后续如果数据验证充分，才会进入更接近生产执行的阶段。
 
 ## What This Project Tries To Solve
 
@@ -241,4 +261,3 @@ The main near-term goals are:
 
 - code comments are primarily written in Chinese
 - repository presentation is kept clear in English so external reviewers can understand the project quickly
-
