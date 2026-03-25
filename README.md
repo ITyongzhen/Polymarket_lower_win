@@ -1,183 +1,154 @@
 # Polymarket Lower Win
 
-这个项目现在按你要求改成了：
+Research and paper-trading toolkit for low-probability Polymarket crypto up/down markets.
 
-- 所有模拟盘参数统一放在 [`.env`](/Users/eagle/Documents/eagle/币/web3_all/Polymarket_lower_win/.env)
-- 中文注释优先
-- 日志统一放在 [`Logs/`](/Users/eagle/Documents/eagle/币/web3_all/Polymarket_lower_win/Logs)
-- 先跑模拟账户，不碰真实下单
+This repository focuses on a specific question: can extremely low-priced outcomes in short-horizon Polymarket crypto markets be traded systematically, instead of randomly buying "lottery tickets" that slowly bleed capital.
 
-## 现在已经有的能力
+The current implementation combines:
 
-### 1. 账户缓存
+- public Polymarket market/profile data collection
+- paper trading with configurable risk controls
+- Chainlink Data Streams raw report collection
+- external market context from Binance and Hyperliquid
+- local logging for replay, review, and later model improvement
 
-脚本：
+## What This Project Tries To Solve
 
-- [`cache_polymarket_profile.py`](/Users/eagle/Documents/eagle/币/web3_all/Polymarket_lower_win/scripts/cache_polymarket_profile.py)
+The original trading idea was based on buying very low-priced outcomes in `5m` and `15m` crypto up/down markets. In practice, that approach can lose money if entries happen:
 
-当前 `little-dead` 的本地缓存已经整理好了：
+- too close to settlement
+- after the market is already effectively decided
+- when the external price has already moved too far
+- when the apparent low price is only a false discount caused by market structure, stale quotes, or one-sided liquidity
 
-- [`cache_summary.json`](/Users/eagle/Documents/eagle/币/web3_all/Polymarket_lower_win/data/raw/polymarket_profiles/little-dead/cache_summary.json)
-- [`activity_trades.jsonl`](/Users/eagle/Documents/eagle/币/web3_all/Polymarket_lower_win/data/raw/polymarket_profiles/little-dead/activity_trades.jsonl)
-- [`low_price_summary.json`](/Users/eagle/Documents/eagle/币/web3_all/Polymarket_lower_win/data/raw/polymarket_profiles/little-dead/low_price_summary.json)
+This project turns that idea into a measurable workflow:
 
-### 2. 低概率单边模拟盘
+1. collect and analyze historical public trading behavior
+2. compare Polymarket prices with external price context
+3. simulate entries with configurable filters
+4. log every signal and paper trade
+5. move settlement research closer to the actual Polymarket resolution source
 
-脚本：
+## Current Scope
 
-- [`run_paper_low_win.py`](/Users/eagle/Documents/eagle/币/web3_all/Polymarket_lower_win/scripts/run_paper_low_win.py)
+Supported symbols currently include:
 
-核心逻辑：
+- `btc`
+- `eth`
+- `sol`
+- `xrp`
+- `doge`
+- `bnb`
+- `hype`
 
-- 同币种同周期同一市场最多 `10` 份，可配
-- 支持拆单，默认 `10` 份目标，`2` 份一笔慢慢打
-- 区分盘前和盘后窗口
-- 根据 Binance 外部价格分成 `flat / mild / stress / wild`
-- 根据阶段和外部波动决定是允许买 `0.01`、`0.02` 还是 `0.03`
-- 用一个启发式“合理低价概率”模型判断是否存在错价
-- 默认加入“结算源不一致保护”：临近结算要求更厚 edge，盘后补单默认关闭
-- 双边低价错价盘默认剔除，不混进单边策略收益
+Supported market windows:
 
-### 3. Chainlink 官方报告采集
+- `5m`
+- `15m`
 
-脚本：
+Important note:
 
-- [`collect_chainlink_reports.py`](/Users/eagle/Documents/eagle/币/web3_all/Polymarket_lower_win/scripts/collect_chainlink_reports.py)
+- `HYPE` does not use Binance spot as its external reference in this repo. It uses Hyperliquid candle data instead, because Binance spot does not provide `HYPEUSDT`.
 
-用途：
+## Main Components
 
-- 通过 Chainlink Data Streams 官方 WebSocket 订阅 `BTC / ETH / SOL / XRP / DOGE / BNB / HYPE`
-- 把原始 `fullReport` 按秒级收到时间落盘到 [`Logs/chainlink_streams/`](/Users/eagle/Documents/eagle/币/web3_all/Polymarket_lower_win/Logs/chainlink_streams)
-- 给后面做“更接近 Polymarket 结算源”的回放和统计打底
+### 1. Profile Research
 
-注意：
+Scripts:
 
-- 这个采集器需要你自己的 Chainlink API key / secret
-- 当前先做“原始报告落盘”，还没有把 `fullReport` 完整解码成价格字段
+- [`scripts/cache_polymarket_profile.py`](scripts/cache_polymarket_profile.py)
+- [`scripts/analyze_polymarket_profile.py`](scripts/analyze_polymarket_profile.py)
 
-## 运行方式
+Purpose:
 
-先直接看并改 [`.env`](/Users/eagle/Documents/eagle/币/web3_all/Polymarket_lower_win/.env)。
+- cache a public Polymarket profile locally
+- inspect low-price entries
+- compare entry timing with external price movement
+- separate "single-side low-probability bets" from "dual-side low-price pair trades"
 
-单轮运行：
+### 2. Paper Trading Engine
 
-```bash
-PYTHONPATH=src python3 scripts/run_paper_low_win.py --once
-```
+Script:
 
-持续运行：
+- [`scripts/run_paper_low_win.py`](scripts/run_paper_low_win.py)
 
-```bash
-PYTHONPATH=src python3 scripts/run_paper_low_win.py
-```
+Core behavior:
 
-采集 Chainlink 官方报告：
+- configurable symbols and timeframes
+- split-order paper entries
+- max shares per market
+- pre-close vs post-close logic
+- low-price band filters
+- volatility and external-price filters
+- source-mismatch guard near settlement
 
-```bash
-PYTHONPATH=src python3 scripts/collect_chainlink_reports.py
-```
+Main logic:
 
-或者直接用项目里的启动脚本：
+- [`src/polymarket_lower_win/paper.py`](src/polymarket_lower_win/paper.py)
 
-```bash
-bash scripts/start_paper_low_win.sh
-bash scripts/start_chainlink_collector.sh
-```
+### 3. Chainlink Data Streams Collector
 
-这两个脚本会优先使用项目里的 [`.venv/`](/Users/eagle/Documents/eagle/币/web3_all/Polymarket_lower_win/.venv) Python；如果没有，再回退到系统 `python3`。
+Script:
 
-如果你想保留一份模板：
+- [`scripts/collect_chainlink_reports.py`](scripts/collect_chainlink_reports.py)
 
-- [`.env.example`](/Users/eagle/Documents/eagle/币/web3_all/Polymarket_lower_win/.env.example)
+Purpose:
 
-## 日志目录
+- subscribe to official Chainlink Data Streams via WebSocket
+- store raw `fullReport` payloads with local receive timestamps
+- build a local archive for later settlement-quality replay and decoding
 
-模拟盘所有运行日志都会落到：
+Main logic:
 
-- [`Logs/paper_low_win/`](/Users/eagle/Documents/eagle/币/web3_all/Polymarket_lower_win/Logs/paper_low_win)
+- [`src/polymarket_lower_win/chainlink_streams.py`](src/polymarket_lower_win/chainlink_streams.py)
 
-Chainlink 原始报告会落到：
+### 4. External Price Context
 
-- [`Logs/chainlink_streams/`](/Users/eagle/Documents/eagle/币/web3_all/Polymarket_lower_win/Logs/chainlink_streams)
+Current external sources:
 
-PM2 总日志会落到：
+- Binance spot candles for `btc`, `eth`, `sol`, `xrp`, `doge`, `bnb`
+- Hyperliquid candles for `hype`
 
-- [`Logs/pm2/`](/Users/eagle/Documents/eagle/币/web3_all/Polymarket_lower_win/Logs/pm2)
+Main logic:
 
-每次 run 一个子目录，主要文件有：
+- [`src/polymarket_lower_win/binance.py`](src/polymarket_lower_win/binance.py)
 
-- `snapshots.jsonl`
-- `signals.jsonl`
-- `trades.jsonl`
-- `state.json`
-- `summary_latest.json`
+## Why Chainlink Matters Here
 
-## 当前策略怎么决定买不买
+One of the key findings behind this repo is that Binance candles are useful as an external market reference, but they are not always reliable as a precise proxy for Polymarket settlement.
 
-当前不是简单“见到 0.01 就买”，而是这样：
+For short-horizon crypto up/down markets, Polymarket rules often reference Chainlink Data Streams. That means near-settlement strategies can be distorted if they assume "Binance close = market resolution".
 
-1. 先看是不是低价研究带：默认 `0.001 - 0.03`
-2. 再看时间：
-   - 盘前可交易区间：默认还剩 `30 - 240` 秒
-   - 盘后研究区间：默认最多只容忍结算后 `5` 秒
-3. 再看 Binance 外部价格：
-   - 如果太平，允许更高一点的买价，例如到 `0.03`
-   - 如果只是轻微波动，只允许到 `0.02`
-   - 如果偏移已经明显，只允许 `0.01`
-   - 如果波动太大，直接跳过
-4. 再看结算源差异风险：
-   - Polymarket 这类 `Up/Down` 市场常写明按 Chainlink 数据流结算，不是按 Binance K 线结算
-   - 所以离结算越近，对“看起来只有一点点 edge”的单子越谨慎
-   - 默认禁掉盘后补单，避免吃到源差异带来的假优势
-5. 再算一个“合理低价概率”：
-   - 时间越早，不确定性越高
-   - 外部价格越平，越可能错杀
-   - 如果市场和外部价格明显不一致，会额外加分
-6. 只有当 `市场低价 < 目标买价` 且 `错价幅度 > 最小 edge` 才会下单
+Because of that, this repo now includes:
 
-## 当前限制
+- a near-close source mismatch guard in the paper strategy
+- a dedicated Chainlink raw report collector
+- a path toward replacing Binance settlement proxy logic with Chainlink-based replay
 
-- 结算仍然先用 Binance 同周期 K 线做代理，不是最终 Polymarket 真实结算源
-- 官方市场规则里，这类市场通常写的是 Chainlink Data Streams；因此 Binance 更适合做“外部状态参考”，不适合做“精确结算回放”
-- 现在已经补了 Chainlink 官方 WebSocket 原始报告采集器，但还没把 `fullReport` 全量解码回价格字段
-- 当前外部价格源里，`HYPE` 已切到 Hyperliquid 官方 K 线接口，因为 Binance 现货没有 `HYPEUSDT`
-- 双边低价事件当前只做识别和过滤，没有单独做配对套利引擎
+## Configuration
 
-## Chainlink Key 怎么拿
+All runtime parameters are stored in:
 
-官方文档写得很明确：
+- [`.env.example`](.env.example)
 
-- Data Streams 的 REST / WebSocket 都需要官方发放的 API credentials
-- 申请入口是 Chainlink 的联系页
+Your local runtime file should be:
 
-你需要做的是：
+- `.env`
 
-1. 打开 [Chainlink Data Streams 文档](https://docs.chain.link/data-streams)
-2. 点里面的 [Contact us](https://chain.link/contact?ref_id=datastreams)
-3. 提交需求时直接写清楚：
-   - 你要 `Data Streams mainnet access`
-   - 你需要 `REST + WebSocket`
-   - 你要的 crypto streams 至少包括 `BTC/USD`、`ETH/USD`、`SOL/USD`、`XRP/USD`
-   - 你的使用场景是 `Polymarket crypto up/down market research and paper trading`
-4. 等官方给你：
-   - `API key`
-   - `API secret`
-   - 确认你有 `wss://ws.dataengine.chain.link` 的访问权限
+The project intentionally keeps parameters explicit in env variables, including:
 
-拿到以后填进 [`.env`](/Users/eagle/Documents/eagle/币/web3_all/Polymarket_lower_win/.env)：
+- symbols
+- timeframes
+- share caps
+- split-order sizing
+- price bands
+- timing windows
+- Chainlink collector settings
+- log locations
 
-```dotenv
-PM_CHAINLINK_API_KEY=你的key
-PM_CHAINLINK_API_SECRET=你的secret
-```
+## Quick Start
 
-## 上云服务器要做什么
-
-建议你最终至少做这几件事：
-
-1. 准备一台长期在线的 Linux 云服务器，装好 `Python 3.11+`、`pip`、`nodejs`、`pm2`
-2. 把项目上传到服务器
-3. 在项目目录执行：
+Create a virtual environment and install the project:
 
 ```bash
 python3 -m venv .venv
@@ -186,28 +157,88 @@ pip install -U pip
 pip install -e .
 ```
 
-4. 填好 [`.env`](/Users/eagle/Documents/eagle/币/web3_all/Polymarket_lower_win/.env)
-5. 先手工 smoke 一次：
+Copy the environment template:
 
 ```bash
-bash scripts/start_chainlink_collector.sh --max-messages 3
-bash scripts/start_paper_low_win.sh --once
+cp .env.example .env
 ```
 
-6. 再用 PM2 托管：
+Run one paper-trading cycle:
+
+```bash
+PYTHONPATH=src python3 scripts/run_paper_low_win.py --once
+```
+
+Run the Chainlink collector:
+
+```bash
+PYTHONPATH=src python3 scripts/collect_chainlink_reports.py
+```
+
+Convenience wrappers are also provided:
+
+```bash
+bash scripts/start_paper_low_win.sh
+bash scripts/start_chainlink_collector.sh
+```
+
+These wrappers prefer the local `.venv` Python automatically.
+
+## PM2 Deployment
+
+For cloud deployment, the repository includes:
+
+- [`ecosystem.config.cjs`](ecosystem.config.cjs)
+- [`scripts/start_paper_low_win.sh`](scripts/start_paper_low_win.sh)
+- [`scripts/start_chainlink_collector.sh`](scripts/start_chainlink_collector.sh)
+
+Typical PM2 usage:
 
 ```bash
 pm2 start ecosystem.config.cjs
 pm2 status
-pm2 logs pm-lower-win-chainlink
 pm2 logs pm-lower-win-paper
+pm2 logs pm-lower-win-chainlink
 pm2 save
 pm2 startup
 ```
 
-## 服务器上的关键注意点
+Important production note:
 
-- **时间同步必须准确**：Chainlink WebSocket 鉴权时间戳默认只容忍约 `5` 秒偏差。服务器务必开启 `chrony` 或 `systemd-timesyncd`
-- **先跑 Chainlink，再跑模拟盘**：这样后面替换成官方结算源更平滑
-- **网络要能访问外网 HTTPS / WSS**：至少要能访问 Polymarket、Binance、Chainlink
-- **先只跑模拟盘**：现在还没接真实下单
+- the server clock must stay accurate
+- Chainlink authentication is timestamp-sensitive
+- enabling `chrony` or `systemd-timesyncd` is strongly recommended
+
+## Logs And Local Data
+
+By default, runtime logs are written under:
+
+- `Logs/paper_low_win/`
+- `Logs/chainlink_streams/`
+- `Logs/pm2/`
+
+Local raw profile caches and research artifacts are intentionally kept out of version control.
+
+## Current Limitations
+
+- Chainlink raw reports are collected, but `fullReport` is not yet fully decoded into price fields inside the main trading loop
+- the paper engine still uses a proxy settlement path in some flows
+- the project is still research-oriented and should not be treated as production auto-trading software
+- no live trading is enabled in this repository
+
+## Repository Status
+
+This is an active research repo, not a finished trading product.
+
+The main near-term goals are:
+
+- decode Chainlink reports into settlement-usable fields
+- replace proxy settlement assumptions where possible
+- improve replay analysis for low-probability entries
+- keep the strategy in paper mode until the evidence is strong enough
+
+## Notes
+
+- code comments are primarily written in Chinese
+- repository presentation is kept clear in English so external reviewers can understand the project quickly
+
