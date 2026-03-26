@@ -204,6 +204,14 @@ bash scripts/start_chainlink_collector.sh
 
 These wrappers prefer the local `.venv` Python automatically.
 
+If `.env` does not exist yet, these wrappers will auto-create it from `.env.example`.
+
+For a one-line PM2 start on a cloud VM:
+
+```bash
+bash scripts/pm2_start_lower_win.sh polymarket-lower-win .env
+```
+
 ## PM2 Deployment
 
 For cloud deployment, the repository includes:
@@ -211,8 +219,16 @@ For cloud deployment, the repository includes:
 - [`ecosystem.config.cjs`](ecosystem.config.cjs)
 - [`scripts/start_paper_low_win.sh`](scripts/start_paper_low_win.sh)
 - [`scripts/start_chainlink_collector.sh`](scripts/start_chainlink_collector.sh)
+- [`scripts/pm2_start_lower_win.sh`](scripts/pm2_start_lower_win.sh)
+- [`docs/云服务器部署.md`](docs/%E4%BA%91%E6%9C%8D%E5%8A%A1%E5%99%A8%E9%83%A8%E7%BD%B2.md)
 
-Typical PM2 usage:
+Recommended one-line PM2 usage:
+
+```bash
+bash scripts/pm2_start_lower_win.sh polymarket-lower-win .env
+```
+
+Manual PM2 usage is also available if you prefer the ecosystem file:
 
 ```bash
 pm2 start ecosystem.config.cjs
