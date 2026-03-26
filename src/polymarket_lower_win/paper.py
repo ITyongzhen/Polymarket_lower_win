@@ -530,6 +530,21 @@ class PaperSimulator:
             else:
                 current_price = float(row["up_price"]) if position.outcome == "Up" else float(row["down_price"])
             unrealized_value += current_price * position.shares
+        decision_reason_counts: Dict[str, int] = {}
+        decision_phase_counts: Dict[str, int] = {}
+        low_band_reason_counts: Dict[str, int] = {}
+        low_band_market_count = 0
+        lowest_markets = sorted(snapshot_rows, key=lambda item: float(item.get("low_price") or 1.0))[:10]
+        for row in snapshot_rows:
+            decision = row.get("decision") or {}
+            reason = str(decision.get("reason") or "unknown")
+            phase = str(decision.get("phase") or "unknown")
+            decision_reason_counts[reason] = int(decision_reason_counts.get(reason, 0)) + 1
+            decision_phase_counts[phase] = int(decision_phase_counts.get(phase, 0)) + 1
+            low_price = float(row.get("low_price") or 0.0)
+            if self.cfg.min_low_price <= low_price <= self.cfg.max_low_price:
+                low_band_market_count += 1
+                low_band_reason_counts[reason] = int(low_band_reason_counts.get(reason, 0)) + 1
         payload = {
             "updated_at_utc": iso_utc(),
             "run_id": self.active_run_id,
@@ -541,6 +556,23 @@ class PaperSimulator:
             "positions": {
                 "open": [asdict(item) for item in open_positions],
                 "closed_tail": [asdict(item) for item in closed_positions[-10:]],
+            },
+            "diagnostics": {
+                "decision_reason_counts": decision_reason_counts,
+                "decision_phase_counts": decision_phase_counts,
+                "low_band_market_count": low_band_market_count,
+                "low_band_reason_counts": low_band_reason_counts,
+                "lowest_markets": [
+                    {
+                        "symbol": row["symbol"],
+                        "timeframe": row["timeframe"],
+                        "slug": row["slug"],
+                        "seconds_remaining": row["seconds_remaining"],
+                        "low_price": row["low_price"],
+                        "reason": (row.get("decision") or {}).get("reason"),
+                    }
+                    for row in lowest_markets
+                ],
             },
             "latest_markets": snapshot_rows,
             "last_error": self.last_error,
