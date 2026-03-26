@@ -6,8 +6,8 @@ cd "$ROOT_DIR"
 
 APP_NAME="${1:-polymarket-lower-win}"
 ENV_FILE="${2:-.env}"
-RUN_STAMP="$(date +%Y%m%d%H%M)"
-PM2_LOG_DIR="Logs/pm2/${RUN_STAMP}"
+RUN_STAMP="$(date +%Y%m%d%H%M%S)"
+PM2_LOG_DIR="logs/pm2/${RUN_STAMP}"
 PAPER_APP_NAME="${APP_NAME}-paper"
 CHAINLINK_APP_NAME="${APP_NAME}-chainlink"
 
@@ -22,10 +22,13 @@ if [ ! -f "$ENV_FILE" ]; then
 fi
 
 mkdir -p "$PM2_LOG_DIR"
+mkdir -p logs
 
 set -a
 source "$ENV_FILE"
 set +a
+
+export PM_LOG_STAMP="$RUN_STAMP"
 
 pm2 delete "$PAPER_APP_NAME" >/dev/null 2>&1 || true
 pm2 delete "$CHAINLINK_APP_NAME" >/dev/null 2>&1 || true

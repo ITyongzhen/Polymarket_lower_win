@@ -249,9 +249,11 @@ Important production note:
 
 By default, runtime logs are written under:
 
-- `Logs/paper_low_win/`
-- `Logs/chainlink_streams/`
-- `Logs/pm2/`
+- `logs/paper_low_win/<run_id>/`
+- `logs/chainlink_streams/<run_id>/`
+- `logs/pm2/<start_stamp>/`
+
+For long-running processes, the paper engine and Chainlink collector rotate to a fresh daily run directory at local midnight, for example `logs/paper_low_win/20260327000000/`.
 
 Local raw profile caches and research artifacts are intentionally kept out of version control.
 

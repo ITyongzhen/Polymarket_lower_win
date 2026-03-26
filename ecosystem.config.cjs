@@ -1,3 +1,8 @@
+const runStamp = new Date()
+  .toISOString()
+  .replace(/[-:TZ.]/g, "")
+  .slice(0, 14);
+
 module.exports = {
   apps: [
     {
@@ -9,8 +14,8 @@ module.exports = {
       max_restarts: 20,
       restart_delay: 3000,
       time: true,
-      out_file: "./Logs/pm2/paper-out.log",
-      error_file: "./Logs/pm2/paper-error.log",
+      out_file: `./logs/pm2/${runStamp}/paper-out.log`,
+      error_file: `./logs/pm2/${runStamp}/paper-error.log`,
       merge_logs: true,
     },
     {
@@ -22,8 +27,8 @@ module.exports = {
       max_restarts: 20,
       restart_delay: 3000,
       time: true,
-      out_file: "./Logs/pm2/chainlink-out.log",
-      error_file: "./Logs/pm2/chainlink-error.log",
+      out_file: `./logs/pm2/${runStamp}/chainlink-out.log`,
+      error_file: `./logs/pm2/${runStamp}/chainlink-error.log`,
       merge_logs: true,
     },
   ],

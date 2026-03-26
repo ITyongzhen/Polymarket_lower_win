@@ -12,6 +12,7 @@ __pycache__/
 .DS_Store
 
 # 运行日志与产物
+logs/
 Logs/
 artifacts/
 

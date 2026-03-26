@@ -13,6 +13,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from polymarket_lower_win.env_config import get_bool, get_float, get_int, get_list, get_str, load_env_file
+from polymarket_lower_win.log_paths import normalize_logs_root, resolve_run_id
 from polymarket_lower_win.paper import PaperConfig, PaperSimulator
 
 
@@ -30,11 +31,7 @@ def load_paper_config_from_env(env_path: Path, *, override_run_id: str = "") -> 
     用户要求“所有参数都写在 env 配置里”，所以这里不再依赖 json 配置文件。
     """
     env = load_env_file(env_path)
-    run_id = override_run_id.strip() or get_str(
-        env,
-        "PM_RUN_ID",
-        f"paper-low-win-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}",
-    )
+    run_id = resolve_run_id(override_run_id.strip() or env.get("PM_RUN_ID", ""))
     payload = {
         "run_id": run_id,
         "poll_seconds": get_float(env, "PM_POLL_SECONDS", 5.0),
@@ -42,7 +39,12 @@ def load_paper_config_from_env(env_path: Path, *, override_run_id: str = "") -> 
         "bankroll_usd": get_float(env, "PM_BANKROLL_USD", 200.0),
         "symbols": get_list(env, "PM_SYMBOLS", ["btc", "eth", "sol", "xrp", "doge", "bnb", "hype"]),
         "timeframes": get_list(env, "PM_TIMEFRAMES", ["5m", "15m"]),
-        "logs_root": get_str(env, "PM_LOGS_ROOT", "Logs/paper_low_win"),
+        "logs_root": str(
+            normalize_logs_root(
+                get_str(env, "PM_LOGS_ROOT", "logs/paper_low_win"),
+                default_subdir="paper_low_win",
+            )
+        ),
         "shares_per_signal": get_float(env, "PM_SHARES_PER_SIGNAL", 10.0),
         "child_shares": get_float(env, "PM_CHILD_SHARES", 2.0),
         "max_shares_per_market": get_float(env, "PM_MAX_SHARES_PER_MARKET", 10.0),

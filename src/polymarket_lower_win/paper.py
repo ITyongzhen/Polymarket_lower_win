@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from polymarket_lower_win.binance import BinancePeriodSnapshot, determine_winning_outcome, fetch_period_snapshot
+from polymarket_lower_win.log_paths import local_day_key, midnight_run_stamp, normalize_logs_root, resolve_run_id
 from polymarket_lower_win.polymarket import BinaryMarket, fetch_current_markets, iso_utc
 
 
@@ -36,7 +37,7 @@ class PaperConfig:
     bankroll_usd: float = 200.0
     symbols: tuple[str, ...] = ("btc", "eth", "sol", "xrp", "doge", "bnb", "hype")
     timeframes: tuple[str, ...] = ("5m", "15m")
-    logs_root: str = "Logs/paper_low_win"
+    logs_root: str = "logs/paper_low_win"
 
     # 单笔目标与拆单参数。
     shares_per_signal: float = 10.0
@@ -95,7 +96,7 @@ class PaperConfig:
         clean = dict(payload)
         symbols = tuple(str(item).lower() for item in clean.get("symbols", cls.symbols))
         timeframes = tuple(str(item) for item in clean.get("timeframes", cls.timeframes))
-        run_id = str(clean.get("run_id") or f"paper-low-win-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}")
+        run_id = resolve_run_id(clean.get("run_id"))
         return cls(
             run_id=run_id,
             poll_seconds=_safe_float(clean.get("poll_seconds"), cls.poll_seconds),
@@ -103,7 +104,12 @@ class PaperConfig:
             bankroll_usd=_safe_float(clean.get("bankroll_usd"), cls.bankroll_usd),
             symbols=symbols or cls.symbols,
             timeframes=timeframes or cls.timeframes,
-            logs_root=str(clean.get("logs_root") or cls.logs_root),
+            logs_root=str(
+                normalize_logs_root(
+                    clean.get("logs_root") or cls.logs_root,
+                    default_subdir="paper_low_win",
+                )
+            ),
             shares_per_signal=_safe_float(clean.get("shares_per_signal"), cls.shares_per_signal),
             child_shares=_safe_float(clean.get("child_shares"), cls.child_shares),
             max_shares_per_market=_safe_float(clean.get("max_shares_per_market"), cls.max_shares_per_market),
@@ -445,27 +451,54 @@ class PaperSimulator:
     这里先不追求“像交易所撮合一样细”，重点是：
     1. 决策透明
     2. 日志完整
-    3. 后续你可以直接拿 Logs 里的文件继续做研究
+    3. 后续你可以直接拿 logs 里的文件继续做研究
     """
 
     def __init__(self, cfg: PaperConfig, *, base_dir: str | Path | None = None) -> None:
         self.cfg = cfg
-        root = Path(base_dir or cfg.logs_root)
-        self.run_dir = root / cfg.run_id
+        self.logs_root = normalize_logs_root(base_dir or cfg.logs_root, default_subdir="paper_low_win")
+        self.active_run_id = resolve_run_id(cfg.run_id)
+        self.active_log_local_day = local_day_key()
+        self.run_dir = self.logs_root / self.active_run_id
+        self._activate_run_dir(self.run_dir)
+        self.cash_usd = float(cfg.bankroll_usd)
+        self.realized_pnl_usd = 0.0
+        self.positions: List[PaperPosition] = []
+        self.cycle_count = 0
+        self.last_error: str = ""
+
+    def _activate_run_dir(self, run_dir: Path) -> None:
+        self.run_dir = run_dir
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.snapshots_path = self.run_dir / "snapshots.jsonl"
         self.signals_path = self.run_dir / "signals.jsonl"
         self.trades_path = self.run_dir / "trades.jsonl"
         self.state_path = self.run_dir / "state.json"
         self.summary_path = self.run_dir / "summary_latest.json"
-        self.cash_usd = float(cfg.bankroll_usd)
-        self.realized_pnl_usd = 0.0
-        self.positions: List[PaperPosition] = []
-        self.cycle_count = 0
-        self.last_error: str = ""
         self.snapshots_path.touch(exist_ok=True)
         self.signals_path.touch(exist_ok=True)
         self.trades_path.touch(exist_ok=True)
+
+    def _rotate_logs_if_needed(self, now_ts: int) -> None:
+        current_local_day = local_day_key(now_ts)
+        if current_local_day == self.active_log_local_day:
+            return
+        previous_run_id = self.active_run_id
+        self.active_log_local_day = current_local_day
+        self.active_run_id = midnight_run_stamp(now_ts)
+        self._activate_run_dir(self.logs_root / self.active_run_id)
+        self._append_jsonl(
+            self.snapshots_path,
+            {
+                "ts_utc": iso_utc(now_ts),
+                "event": "LOG_ROTATED",
+                "previous_run_id": previous_run_id,
+                "run_id": self.active_run_id,
+                "local_day": current_local_day,
+            },
+        )
+        self._write_state()
+        self._write_summary([])
 
     def _append_jsonl(self, path: Path, payload: Dict[str, Any]) -> None:
         with path.open("a", encoding="utf-8") as handle:
@@ -474,6 +507,8 @@ class PaperSimulator:
     def _write_state(self) -> None:
         state = {
             "updated_at_utc": iso_utc(),
+            "run_id": self.active_run_id,
+            "logs_root": str(self.logs_root),
             "cash_usd": round(self.cash_usd, 6),
             "realized_pnl_usd": round(self.realized_pnl_usd, 6),
             "cycle_count": self.cycle_count,
@@ -497,7 +532,7 @@ class PaperSimulator:
             unrealized_value += current_price * position.shares
         payload = {
             "updated_at_utc": iso_utc(),
-            "run_id": self.cfg.run_id,
+            "run_id": self.active_run_id,
             "cash_usd": round(self.cash_usd, 6),
             "realized_pnl_usd": round(self.realized_pnl_usd, 6),
             "equity_usd_est": round(self.cash_usd + unrealized_value, 6),
@@ -609,6 +644,7 @@ class PaperSimulator:
 
     def run_cycle(self, *, now_ts: int | None = None) -> Dict[str, Any]:
         cycle_ts = int(now_ts or time.time())
+        self._rotate_logs_if_needed(cycle_ts)
         self.last_error = ""
         markets = fetch_current_markets(self.cfg.symbols, self.cfg.timeframes, now_ts=cycle_ts)
         snapshot_rows: List[Dict[str, Any]] = []
