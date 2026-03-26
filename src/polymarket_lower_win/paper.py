@@ -246,7 +246,8 @@ class PaperPosition:
 
 def _phase_labels(seconds_remaining: int, cfg: PaperConfig) -> tuple[str, str]:
     """把当前时间映射成交易阶段。"""
-    if seconds_remaining > int(cfg.pre_max_seconds_remaining):
+    pre_max_seconds_remaining = int(cfg.pre_max_seconds_remaining)
+    if pre_max_seconds_remaining > 0 and seconds_remaining > pre_max_seconds_remaining:
         return "too_early", "离结算太远"
     if seconds_remaining >= int(cfg.pre_min_seconds_remaining):
         return "pre_close", "盘前可交易区间"

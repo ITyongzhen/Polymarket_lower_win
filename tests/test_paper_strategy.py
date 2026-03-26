@@ -132,6 +132,53 @@ class PaperStrategyTest(unittest.TestCase):
         self.assertFalse(decision.should_buy)
         self.assertEqual(decision.reason, "tail")
 
+    def test_no_pre_max_limit_allows_earlier_window(self) -> None:
+        cfg = PaperConfig(
+            run_id="test",
+            pre_min_seconds_remaining=10,
+            pre_max_seconds_remaining=0,
+            max_low_price=0.05,
+            pre_flat_price_cap=0.05,
+            pre_mild_price_cap=0.04,
+            pre_stress_price_cap=0.03,
+            min_edge_points=0.0008,
+        )
+        market = BinaryMarket(
+            symbol="xrp",
+            timeframe="15m",
+            slug="xrp-updown-15m-1774492200",
+            title="XRP Up or Down",
+            start_ts=1774492200,
+            end_ts=1774493100,
+            up_price=0.96,
+            down_price=0.04,
+            min_order_size=1.0,
+            tick_size=0.01,
+            active=True,
+            closed=False,
+            source="test",
+        )
+        external = BinancePeriodSnapshot(
+            symbol="xrp",
+            timeframe="15m",
+            start_ts=1774492200,
+            end_ts=1774493100,
+            open_price=2.5,
+            high_price=2.5003,
+            low_price=2.4999,
+            last_price=2.5001,
+        )
+        decision = evaluate_market(
+            market,
+            external,
+            cfg,
+            current_shares=0.0,
+            now_ts=1774492793,
+            open_position_count=0,
+        )
+        self.assertNotEqual(decision.reason, "too_early")
+        self.assertEqual(decision.phase, "pre_close")
+
 
 if __name__ == "__main__":
     unittest.main()
